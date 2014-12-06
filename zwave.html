@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<!-- saved from url=(0037)http://213.88.24.28:9707/zwave.html?1 -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no,  minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    
+
+    <link rel="apple-touch-icon" href="http://213.88.24.28:9707/intra.png">
+
+    <title>iH</title>
+
+    <script type="text/javascript" src="./zwave_files/jquery-1.8.2.min.js"></script><style type="text/css"></style>
+    <script type="text/javascript" src="./zwave_files/underscore-min.js"></script>
+
+    <script type="text/javascript">
+
+        /*
+            CATEGORY #2 - Dimmable Light: 'status' is 0 or 1 for off or on, and if status is 1, 'level' is a value from 0-100 to indicate the brightness.
+                Buttons 'on' and 'off' should be bound to the 'status' for the device,    and if selected, should send the service "urn:upnp-org:serviceId:SwitchPower1" action "SetTarget" with the argument "newTargetValue" is a value of 0 for off or 1 for on.
+                There should also be a slider which represents the 'level' for the device from 0-100. If the user changes the level, send the service "urn:upnp-org:serviceId:Dimming1", action "SetLoadLevelTarget" and argument "newLoadlevelTarget" is 0-100.
+
+            CATEGORY #3 - Switch: Like dimmable light, but it only has 'status'
+
+            CATEGORY #4 - Security Sensor: 'tripped' is 0 or 1 to indicate if the sensor is tripped or not (1=tripped). 'armed' is 0 or 1 to indicate if it's in an armed state. There is a single control button 'ARM'. If the 'armed' status is 1, display the 'ARM' button in a highlighted state, otherwise in a normal state. When the 'ARM' button is selected, this is one case where you do not use lu_action; use lu_variableset instead. ARM is simply a flag in the engine, so use this: http://ip:3480/data_request?id=lu_variableset&DeviceNum=x&serviceId=urn:micasaverde-com:serviceId:SecuritySensor1&Variable=Armed&Value=y and replace x with the device id, and replace y with 0 if the armed status is 1, and 1 if it's 0, so the ARM button is a toggle.
+
+            CATEGORY #5 - Thermostat: 'fan' is 'auto' if the fan mode is off/normal or 'ContinuousOn' if the fan is always on. 'mode' indicates the mode of the thermostat with options being 'Off', 'HeatOn', 'CoolOn', 'AutoChangeOver'. 'hvacstate' indicates the current state of the thermostat, in other words, if it's in cool mode, it indicates if the compressor is actively cooling or if the set point is reached. Values are 'Idle', 'Heating', 'Cooling', 'FanOnly', 'PendingHeat', 'PendingCool', 'Vent'. 'temperature' is the current ambient temperature. 'heatsp' and 'coolsp' are the current heat/cool setpoints. The user indicates in their systems location preferences if they want english or metric, so just display the values as shown and do not worry about converting them. There are 4 mode buttons 'Off', 'Heat', 'Cool', and 'Auto' which should be bound to the 'mode' value, and when selected send the service "urn:upnp-org:serviceId:HVAC_UserOperatingMode1" and action "SetModeTarget" with the argument "NewModeTarget" has the values "Off", "HeatOn", "CoolOn" or "AutoChangeOver". Depending on the space on the user interface these can either be 4 buttons with the active mode button selected, or a drop-down that shows the active mode and let's the user change it. The fan is simply on or off, so just display a 'fan' button which is highlighted if the 'fan' variable is 1. Be sure it's separate from the 4 modes so it doesn't look like a 5th mode. If the user selects it, send the service "urn:upnp-org:serviceId:HVAC_FanOperatingMode1" and action "SetMode" with the argument "NewMode" has the values "Auto" for off or "ContinuousOn" for on. In other words, if the fan was off and the fan button is not highlighted, send the value "ContinuousOn" and if it was on, send the value "Auto" so it is a toggle. Display the values for 'heatsp' and 'coolsp', but if the user selects either one, display a drop-down or a pop-up or a keypad to let the user select a new temperature. Then send the service "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat" or "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool" with the action "SetCurrentSetpoint" and the argument "NewCurrentSetpoint" is whatever temperature the user choose. Display the value of the 'temperature' to the user as read only, since it's the ambient temperature.
+
+            CATEGORY #6 - Camera: These don't have a status. The control button is marked 'VIEW', but it doesn't send an action. It just displays an image viewer on the controller. The viewer should have a large JPEG image which you get by calling: http://ip:3480/data_request?id=cam_image&Device_Num=x where x is the device ID. This request returns a JPEG file. If the camera also has a status 'streaming' and the status is not empty, the the image viewer popup should display a 'LIVE VIDEO' button, which displays the streaming video instead. See the Remote Camera Streaming to learn how. Both the JPEG image viewer and the motion image viewer must have buttons for the user to control the pan/tilt/zoom of the camera. These buttons are L, R, U, D, +, - (for left, right, up, down, zoom in, zoom out). When those buttons are pressed, use the lu_action with the service "urn:micasaverde-com:serviceId:PanTiltZoom1" and the action "MoveLeft", "MoveRight", "MoveUp", "MoveDown", "ZoomIn" or "ZoomOut". There are no arguments for those actions.
+
+            CATEGORY #7 - Door lock: 'status' is 1 for locked or 0 for unlocked. Display a 'lock' and 'unlock' button which are bound to the 'status' variable. If selected, use the service "urn:micasaverde-com:serviceId:DoorLock1" action "SetTarget" and value newTargetValue which is 0 for unlocked and 1 for locked.
+
+            CATEGORY #8 - Window covering: same as Dimmable Light.
+
+            CATEGORY #16 - Humidity sensor: 'humidity' is the relative humidity from 0-100. Just display the 'humidity', there are no control buttons.
+
+            CATEGORY #17 - Temperature sensor: 'temperature' same as with a thermostat. Just display the 'temperature', there are no control buttons.
+
+            CATEGORY #18 - Light sensor: 'light' is a measurement of the ambient light in the room. There is no universal scale, so just display the number for the user. Just display the 'light', there are no control buttons.
+
+            CATEGORY #21 - Power meter: 'watts' is the current consumption in watts. Just display the 'watts', there are no control buttons.
+        */
+
+        var services = {
+            SwitchPower1: {
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:SwitchPower1',
+                action: 'SetTarget',
+                argument: 'newTargetValue'
+            },
+            Dimming1: {
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:Dimming1',
+                action: 'SetLoadLevelTarget',
+                argument: 'newLoadlevelTarget'
+            },
+            SecuritySensor1: {
+                type: 'variable',
+                service_id: 'urn:micasaverde-com:serviceId:SecuritySensor1',
+                variable: 'Armed'
+            },
+            HVAC_UserOperatingMode1: { //"Off", "HeatOn", "CoolOn" or "AutoChangeOver"
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:HVAC_UserOperatingMode1',
+                action: 'SetModeTarget',
+                argument: 'NewModeTarget'
+            },
+            HVAC_FanOperatingMode1: {   //Auto" for off or "ContinuousOn" for on
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:HVAC_FanOperatingMode1',
+                action: 'SetMode',
+                argument: 'NewMode'
+            },
+            TemperatureSetpoint1_Heat: {
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:TemperatureSetpoint1_Heat',
+                action: 'SetCurrentSetpoint',
+                argument: 'NewCurrentSetpoint'
+            },
+            TemperatureSetpoint1_Cool: {
+                type: 'action',
+                service_id: 'urn:upnp-org:serviceId:TemperatureSetpoint1_Cool',
+                action: 'SetCurrentSetpoint',
+                argument: 'NewCurrentSetpoint'
+            },
+            PanTiltZoom1: { //"MoveLeft", "MoveRight", "MoveUp", "MoveDown", "ZoomIn" or "ZoomOut"
+                type: 'action',
+                service_id: 'urn:micasaverde-com:serviceId:PanTiltZoom1'
+            },
+            DoorLock1: {
+                type: 'action',
+                service_id: 'urn:micasaverde-com:serviceId:DoorLock1',
+                action: 'SetTarget',
+                argument: 'newTargetValue'
+            }
+
+
+
+        }
+
+        var categories = {
+            2: {
+                name: 'Dimmable light',
+                services: ['SwitchPower1', 'Dimming1'],
+                values: ['status', 'level']
+            },
+            3: {
+                name: 'Switch',
+                services: ['SwitchPower1'],
+                values: ['status']
+            },
+            4: {
+                name: 'Security sensor',
+                services: ['SecuritySensor1'],
+                values: ['tripped', 'armed']
+            },
+            5: {
+                name: 'Thermostat',
+                services: ['HVAC_FanOperatingMode1', 'TemperatureSetpoint1_Heat', 'TemperatureSetpoint1_Cool'],
+                values: ['mode', 'hvacstate', 'temperature', 'heatsp', 'coolsp']
+            },
+            6: {    //http://ip:3480/data_request?id=cam_image&Device_Num=x
+                name: 'Camera',
+                services: ['PanTiltZoom1']
+            },
+            7: {
+                name: 'Door lock',
+                services: ['DoorLock1'],
+                values: ['status']
+            },
+            8: {
+                name: 'Window covering',
+                services: ['SwitchPower1', 'Dimming1'],
+                values: ['status', 'level']
+            },
+            16: {
+                name: 'Humidity sensor',
+                values: ['humidity']
+            },
+            17: {
+                name: 'Temperature sensor',
+                values: ['temperature']
+            },
+            18: {
+                name: 'Light sensor',
+                values: ['light']
+            },
+            21: {
+                name: 'Power meter',
+                values: ['watts']
+            }
+
+        }
+
+    	$(document).ready(function() {
+    		
+            var ip = '192.168.0.119'; //
+
+            //var destination = "http://"+ip+":3480/data_request?id=status&output_format=json"
+            var destination = "http://"+ip+":3480/data_request?id=sdata"
+            var lastquerytime = 0;
+            var querycount = 0;
+            var starttime = (new Date())*1;
+            var time = starttime;
+
+            var getvaluesmarkup = function (device) {
+                var markup = '';
+                _.each(categories[device.category].values, function (valuename) {
+                    markup += '<div style="display:inline-block;vertical-align:top; margin-left:10px;">'
+                        markup += '<div style="display:inline-block;vertical-align:top; color:#09f; min-width:100px;">'
+                            markup += valuename;
+                        markup += '</div>:'
+                        markup += '<div style="display:inline-block;vertical-align:top; color:#f90;min-width:50px;">'
+                            markup += device[valuename];
+                        markup += '</div>';
+                    markup += '</div>'
+                });
+                return markup;
+            };
+
+            var reload = function (query) {
+
+
+                $.ajax({
+                    type: "GET",
+                    url: destination+'&trash='+time+'&timeout=60',
+                    statusCode: {
+                        200: function(response){
+                            
+                            time = (new Date())*1;
+                            
+                            querycount++;
+                            var markup = '';
+                            // markup += (time - lastquerytime)+'ms'+' ('+(time-starttime)/querycount+')';
+                            _.each(response.devices, function (device) {
+
+                                var currentdevel = $('#result').find('.device[data-deviceid="'+device.id+'"]');
+                                if(currentdevel.length)
+                                {
+                                    currentdevel.find('.values').html(getvaluesmarkup(device));
+                                }
+                                else
+                                {
+                                    // markup += '<div>'+JSON.stringify(device)+'</div>';
+                                    markup += '<div class="device" data-deviceid="'+device.id+'" style="margin-top:10px;border:1px solid black;padding:10px;">'
+
+                                        markup += '<div style="display:inline-block;vertical-align:top; font-weight:bold;min-width:200px;">'
+                                            markup += device.name
+                                        markup += '</div>'
+
+                                        markup += '<div class="values" style="display:inline-block;vertical-align:top;">'
+                                            markup += getvaluesmarkup(device);
+                                        markup += '</div>'
+
+
+                                        markup += '<div style="display:inline-block;vertical-align:top;float:right;">'
+                                            _.each(categories[device.category].services, function (servicename) {
+                                                // markup += servicename;
+                                                //input
+                                                markup += '<div data-service="'+servicename+'" style="display:inline-block;vertical-align:top; margin-left:10px;text-align:right; min-width:200px;">'
+                                                    markup += '<input type="text" style="width:50px;margin-right:10px;text-align:center;;"/>'
+                                                    markup += '<button class="sendbutton" >'+servicename+'</button>'
+                                                markup += '</div>'
+                                                //sendbutton
+                                            });
+                                        markup += '</div>'
+                                    
+                                    markup +=  '</div>'
+                                    
+                                    $('#result').html(markup);
+                                    
+                                    $('#result').find('.sendbutton').unbind('click').bind('click', function () {
+                                        var deviceid = $(this).closest('.device').data('deviceid');
+                                        var servicename  = $(this).parent().data('service');
+                                        var servicevalue = $(this).siblings('input').val();
+                                        // alert(servicename+':'+servicevalue)
+                                        // alert(JSON.stringify(services[servicename]))
+                                        var service = services[servicename];
+
+                                        if(service)
+                                        {
+                                            if(service.type === 'action')
+                                            {
+                                                var destination = 'http://192.168.0.119:3480/data_request?id=lu_action&output_format=json&DeviceNum='+deviceid+'&serviceId='+service.service_id+'&action='+service.action+'&'+service.argument+'='+servicevalue;
+
+
+                                                $.ajax({
+                                                    type: "GET",
+                                                    url: destination+'&trash='+time,
+                                                    statusCode: {
+                                                        200: function(response){
+                                                            $('#sendresult').html(JSON.stringify(response));
+                                                        }
+                                                    },
+                                                    error: function() {
+                                                        // default behavior
+
+                                                   }
+                                                });
+                                            }
+                                        }
+                                    });
+                                }
+
+                            });
+
+
+
+                            lastquerytime = time;
+                            // setTimeout(function () {
+
+                                reload(query);
+                            // }, 100);
+                        }
+                    },
+                    error: function() {
+                        // default behavior
+
+                   }
+                });
+
+            };
+
+            reload(destination);
+
+        });
+    </script>
+
+</head>
+
+<body>
+
+    <div style="margin:10px;">
+        <div>RESULT:</div> 
+        <div id="sendresult">
+        </div>
+    </div>
+    <hr>
+    <div style="margin:10px;">
+        <div>CURRENT STATE:</div>
+        <div id="result">
+        </div>
+    </div>
+
+</body></html>
